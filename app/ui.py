@@ -2,7 +2,7 @@ import tkinter as tk
 from tkinter import filedialog, messagebox
 from tkinter import ttk
 import threading
-from video_processing import interpolate_video
+from video_processing import interpolate_video, add_audio_to_video
 
 
 class VideoInterpolationApp(tk.Tk):
@@ -30,11 +30,10 @@ class VideoInterpolationApp(tk.Tk):
         self.factor_entry.grid(row=2, column=1, padx=10, pady=5, sticky="w")
         self.factor_entry.insert(0, "2")
 
-        # Method selection (na razie jedna opcja)
-        tk.Label(self, text="Interpolation Method:").grid(row=3, column=0, padx=10, pady=5, sticky="e")
-        self.method_var = tk.StringVar(value="Linear Interpolation")
-        self.method_menu = tk.OptionMenu(self, self.method_var, "Linear Interpolation")
-        self.method_menu.grid(row=3, column=1, padx=10, pady=5, sticky="w")
+        # Audio option checkbox
+        self.audio_var = tk.BooleanVar()
+        self.audio_check = tk.Checkbutton(self, text="Include Audio", variable=self.audio_var)
+        self.audio_check.grid(row=3, column=1, padx=10, pady=5, sticky="w")
 
         # Progress bar
         self.progress = ttk.Progressbar(self, orient="horizontal", length=300, mode="determinate")
@@ -76,14 +75,36 @@ class VideoInterpolationApp(tk.Tk):
             return
 
         # Start the interpolation in a new thread
-        threading.Thread(target=self.run_interpolation, args=(input_file, output_file, factor)).start()
+        threading.Thread(target=self.run_interpolation, args=(input_file, output_file, factor, self.audio_var.get())).start()
 
-    def run_interpolation(self, input_file, output_file, factor):
+    def run_interpolation(self, input_file, output_file, factor, include_audio):
         try:
+            # Interpolacja wideo
             interpolate_video(input_file, output_file, factor, progress_callback=self.update_progress)
-            messagebox.showinfo("Success", "Interpolation completed successfully!")
+
+            # Reset progress bar before starting audio addition
+            self.progress['value'] = 0
+            self.update_idletasks()
+
+            # Dodanie audio i nadpisanie pliku
+            if include_audio:
+                self.add_audio_with_progress(input_file, output_file)
+
+            # Powiadomienie o zakończeniu całego procesu
+            messagebox.showinfo("Success", "Final video has been created successfully!")
+
         except Exception as e:
             messagebox.showerror("Error", str(e))
+
+    def add_audio_with_progress(self, input_file, output_file):
+        """Dodaje audio do pliku wideo, aktualizując pasek postępu."""
+
+        # Dodanie audio z aktualizacją paska postępu
+        def progress_callback(current, total):
+            progress = (current / total) * 100
+            self.update_progress(progress)
+
+        add_audio_to_video(input_file, output_file, progress_callback)
 
 
 if __name__ == "__main__":

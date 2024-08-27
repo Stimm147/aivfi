@@ -1,5 +1,5 @@
 import cv2
-import numpy as np
+import os
 from moviepy.editor import VideoFileClip
 
 
@@ -48,11 +48,39 @@ def interpolate_video(input_path, output_path, interpolation_factor, progress_ca
     cv2.destroyAllWindows()
 
 
-def add_audio_to_video(input_video_path, output_video_path):
-    """Dodaje oryginalne audio do interpolowanego wideo."""
+def add_audio_to_video(input_video_path, output_video_path, progress_callback=None):
+    """Dodaje oryginalne audio do interpolowanego wideo za pomocą moviepy, przycinając audio do długości wideo."""
     video = VideoFileClip(output_video_path)
     original = VideoFileClip(input_video_path)
 
-    # Zastąpienie ścieżki audio
-    video_with_audio = video.set_audio(original.audio)
-    video_with_audio.write_videofile(output_video_path, codec='libx264', audio_codec='aac')
+    # Przycinanie audio do długości wideo
+    if original.audio:
+        audio = original.audio.subclip(0, video.duration)
+        video_with_audio = video.set_audio(audio)
+    else:
+        video_with_audio = video
+
+    # Używamy liczby klatek, aby obliczyć postęp
+    total_frames = video.reader.nframes
+    current_frame = 0
+
+    # Funkcja callback, która jest wywoływana po każdej zapisanej klatce
+    def audio_progress_callback(get_frame, t):
+        nonlocal current_frame
+        current_frame += 1
+        if progress_callback:
+            progress_callback(current_frame, total_frames)
+        return get_frame(t)
+
+    video_with_audio = video_with_audio.fl(audio_progress_callback, apply_to=['audio'])
+
+    # Zapisz finalny plik wideo z audio z dopiskiem "_output"
+    temp_output_path = output_video_path.replace(".mp4", "_output.mp4")
+    video_with_audio.write_videofile(temp_output_path, codec='libx264', audio_codec='aac')
+
+    # Usuń oryginalny plik wyjściowy bez audio
+    if os.path.exists(output_video_path):
+        os.remove(output_video_path)
+
+    # Zmień nazwę pliku z "_output" na oryginalną nazwę
+    os.rename(temp_output_path, output_video_path)
